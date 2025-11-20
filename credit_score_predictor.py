@@ -216,23 +216,81 @@ class CreditScorePredictor:
     
     def _analyze_user_profile_simple(self, user_data: Dict[str, float], predicted_score: float) -> Dict[str, Any]:
         """
-        Analyze user's financial profile and identify areas for improvement (simplified version).
+        Analyze user's financial profile using ML-based recommendations.
         
         Args:
             user_data: User's financial data
             predicted_score: Predicted credit score
             
         Returns:
-            Analysis with improvement suggestions
+            Analysis with ML-generated improvement suggestions
         """
+        # Try to use ML recommendation engine
+        try:
+            from ml_recommendation_engine import MLRecommendationEngine
+            
+            # Load ML recommendation models
+            ml_engine = MLRecommendationEngine()
+            try:
+                # Use absolute path
+                import os
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                model_path = os.path.join(script_dir, 'ml_recommendation_models.pkl')
+                ml_engine.load_models(model_path)
+                
+                # Add credit score to user data for ML analysis
+                user_data_with_score = user_data.copy()
+                user_data_with_score['credit_score'] = predicted_score
+                
+                # Get ML recommendations
+                ml_recommendations = ml_engine.get_ml_recommendations(user_data_with_score)
+                
+                # Format for compatibility with existing interface
+                analysis = {
+                    'score_category': self._get_score_category(predicted_score),
+                    'strengths': ml_recommendations['strengths'],
+                    'areas_for_improvement': [],
+                    'specific_suggestions': [],
+                    'ml_insights': ml_recommendations.get('ml_insights', []),
+                    'recommendation_type': 'ML-Generated'
+                }
+                
+                # Merge all ML recommendations into areas for improvement with priority indicators
+                all_recommendations = []
+                
+                # High priority recommendations (most important)
+                for rec in ml_recommendations['high_priority']:
+                    all_recommendations.append(f"🔴 {rec}")
+                
+                # Medium priority recommendations  
+                for rec in ml_recommendations['medium_priority']:
+                    all_recommendations.append(f"🟡 {rec}")
+                
+                # Low priority recommendations
+                for rec in ml_recommendations['low_priority']:
+                    all_recommendations.append(f"🟢 {rec}")
+                
+                analysis['areas_for_improvement'] = all_recommendations
+                
+                return analysis
+                
+            except (FileNotFoundError, Exception) as e:
+                print(f"ML recommendation engine failed: {str(e)}. Using fallback rules.")
+                # Don't try to train new models during runtime - just fall back
+                
+        except (ImportError, Exception) as e:
+            print(f"ML recommendation engine not available: {str(e)}. Using fallback rules.")
+            
+        # Fallback to original rule-based system if ML fails
         analysis = {
             'score_category': self._get_score_category(predicted_score),
             'strengths': [],
             'areas_for_improvement': [],
-            'specific_suggestions': []
+            'specific_suggestions': [],
+            'recommendation_type': 'Rule-Based (Fallback)'
         }
         
-        # Analyze each factor
+        # Simple fallback rules
         if user_data['payment_history'] >= 0.9:
             analysis['strengths'].append("Excellent payment history")
         elif user_data['payment_history'] < 0.8:
@@ -244,30 +302,6 @@ class CreditScorePredictor:
         elif user_data['credit_utilization'] > 50:
             analysis['areas_for_improvement'].append("High credit utilization")
             analysis['specific_suggestions'].append(f"Reduce credit utilization from {user_data['credit_utilization']:.1f}% to below 30%")
-        
-        if user_data['savings_ratio'] >= 0.2:
-            analysis['strengths'].append("Good savings habit")
-        elif user_data['savings_ratio'] < 0.1:
-            analysis['areas_for_improvement'].append("Low savings ratio")
-            analysis['specific_suggestions'].append("Increase monthly savings to at least 10% of income")
-        
-        if user_data['debt_to_income_ratio'] <= 0.3:
-            analysis['strengths'].append("Manageable debt levels")
-        elif user_data['debt_to_income_ratio'] > 0.4:
-            analysis['areas_for_improvement'].append("High debt-to-income ratio")
-            analysis['specific_suggestions'].append("Work on reducing overall debt burden")
-        
-        if user_data['emergency_fund_months'] >= 6:
-            analysis['strengths'].append("Strong emergency fund")
-        elif user_data['emergency_fund_months'] < 3:
-            analysis['areas_for_improvement'].append("Insufficient emergency fund")
-            analysis['specific_suggestions'].append("Build emergency fund to cover 3-6 months of expenses")
-        
-        if user_data['income_stability_index'] >= 0.8:
-            analysis['strengths'].append("Stable income")
-        elif user_data['income_stability_index'] < 0.6:
-            analysis['areas_for_improvement'].append("Income stability concerns")
-            analysis['specific_suggestions'].append("Diversify income sources or focus on platform loyalty")
         
         return analysis
     
