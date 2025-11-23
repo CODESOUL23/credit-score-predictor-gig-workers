@@ -77,6 +77,15 @@ st.markdown("""
         color: #2e7d32;
         font-style: italic;
     }
+    .limiting-box {
+        background-color: #f5f5f5;
+        padding: 1rem;
+        border-radius: 5px;
+        border-left: 4px solid #757575;
+        margin: 0.5rem 0;
+        color: #424242;
+        font-style: italic;
+    }
     @keyframes pulse {
         0% { box-shadow: 0 2px 4px rgba(211, 47, 47, 0.2); }
         50% { box-shadow: 0 4px 8px rgba(211, 47, 47, 0.4); }
@@ -129,15 +138,17 @@ def load_model():
 def get_score_color(score):
     """Get color based on credit score."""
     if score >= 750:
-        return "#22c55e"  # Green
+        return "#22c55e"  # Green (Excellent)
     elif score >= 700:
-        return "#3b82f6"  # Blue
+        return "#3b82f6"  # Blue (Very Good)
     elif score >= 650:
-        return "#f59e0b"  # Orange
-    elif score >= 600:
-        return "#ef4444"  # Red
+        return "#8b5cf6"  # Purple (Good)
+    elif score >= 550:
+        return "#f59e0b"  # Orange (Fair)
+    elif score >= 500:
+        return "#ef4444"  # Red (Poor)
     else:
-        return "#dc2626"  # Dark Red
+        return "#dc2626"  # Dark Red (Very Poor)
 
 def create_gauge_chart(score):
     """Create a gauge chart for credit score."""
@@ -151,11 +162,12 @@ def create_gauge_chart(score):
             'axis': {'range': [None, 850], 'tickwidth': 1, 'tickcolor': "darkblue"},
             'bar': {'color': get_score_color(score)},
             'steps': [
-                {'range': [300, 600], 'color': "lightgray"},
-                {'range': [600, 650], 'color': "gray"},
-                {'range': [650, 700], 'color': "lightblue"},
-                {'range': [700, 750], 'color': "blue"},
-                {'range': [750, 850], 'color': "green"}
+                {'range': [300, 500], 'color': "#ff4b4b"},   # Very Poor (Red)
+                {'range': [500, 550], 'color': "#ffa500"},   # Poor (Orange)
+                {'range': [550, 650], 'color': "#faca2b"},   # Fair (Yellow)
+                {'range': [650, 700], 'color': "#90ee90"},   # Good (Light Green)
+                {'range': [700, 750], 'color': "#228b22"},   # Very Good (Green)
+                {'range': [750, 850], 'color': "#006400"}    # Excellent (Dark Green)
             ],
             'threshold': {
                 'line': {'color': "red", 'width': 4},
@@ -324,6 +336,17 @@ def gig_worker_tab():
                     </div>
                     """, unsafe_allow_html=True)
             
+            # Limiting Factors (Historical/Fixed)
+            if 'limiting_factors' in st.session_state.analysis and st.session_state.analysis['limiting_factors']:
+                st.markdown("### 🚫 Limiting Factors (Historical/Fixed)")
+                st.info("These factors are currently limiting your score potential and take time to improve, regardless of immediate actions.")
+                for factor in st.session_state.analysis['limiting_factors']:
+                    st.markdown(f"""
+                    <div class="limiting-box">
+                        {factor}
+                    </div>
+                    """, unsafe_allow_html=True)
+
             # ML Insights (if available) - Show as additional information
             if 'ml_insights' in st.session_state.analysis and st.session_state.analysis['ml_insights']:
                 st.markdown("### 🧠 AI Insights")

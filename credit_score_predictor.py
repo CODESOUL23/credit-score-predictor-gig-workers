@@ -100,8 +100,9 @@ class CreditScorePredictor:
         # Fill any remaining NaN values
         X_enhanced = X_enhanced.fillna(X_enhanced.median())
         
-        # Update feature names
-        self.feature_names = list(X_enhanced.columns)
+        # Update feature names only if not already set (e.g. during training)
+        if not hasattr(self, 'feature_names') or not self.feature_names:
+            self.feature_names = list(X_enhanced.columns)
         
         return X_enhanced
     
@@ -163,8 +164,9 @@ class CreditScorePredictor:
             
             print(f"{name} - RMSE: {rmse:.2f}, MAE: {mae:.2f}, R²: {r2:.3f}")
         
-        # Select best model based on R²
-        best_model_name = max(results.keys(), key=lambda k: results[k]['r2'])
+        # Select Gradient Boosting model (works best for this data without scaling issues)
+        # Linear Regression has scaling problems with engineered features
+        best_model_name = 'Gradient Boosting'
         self.model = results[best_model_name]['model']
         
         # Get feature importance
@@ -199,15 +201,26 @@ class CreditScorePredictor:
         # Engineer features
         user_df_enhanced = self.engineer_features(user_df)
         
+        # Ensure columns match training data order
+        if hasattr(self, 'feature_names') and self.feature_names:
+            # Add missing columns with 0
+            for col in self.feature_names:
+                if col not in user_df_enhanced.columns:
+                    user_df_enhanced[col] = 0
+            
+            # Reorder columns to match model training data
+            user_df_enhanced = user_df_enhanced[self.feature_names]
+        
         # Make prediction
-        if isinstance(self.model, LinearRegression):
-            user_scaled = self.scaler.transform(user_df_enhanced)
-            predicted_score = self.model.predict(user_scaled)[0]
-        else:
-            predicted_score = self.model.predict(user_df_enhanced)[0]
+        # Always scale features as the model was trained on scaled data
+        user_scaled = self.scaler.transform(user_df_enhanced)
+        predicted_score = self.model.predict(user_scaled)[0]
         
         # Round to nearest integer
         predicted_score = round(predicted_score)
+        
+        # Ensure score is within valid range
+        predicted_score = max(300, min(850, predicted_score))
         
         # Provide analysis (without impact analysis to avoid recursion)
         analysis = self._analyze_user_profile_simple(user_data, predicted_score)
@@ -225,6 +238,30 @@ class CreditScorePredictor:
         Returns:
             Analysis with ML-generated improvement suggestions
         """
+        # Identify limiting factors (historical/fixed constraints)
+        limiting_factors = []
+        
+        if user_data['missed_payments_last_year'] > 0:
+            limiting_factors.append(f"⚠️ {int(user_data['missed_payments_last_year'])} missed payment(s) in the last year are heavily penalizing your score. This history takes time to fade.")
+            
+        if user_data['payment_history'] < 0.90:
+            limiting_factors.append("⚠️ Historical payment reliability is below 90%. Past inconsistencies have a long-term impact.")
+            
+        if user_data['length_credit_history'] < 3:
+            limiting_factors.append(f"⚠️ Short credit history ({user_data['length_credit_history']} years). Length of history accounts for 15% of your score and can only improve with time.")
+            
+        if user_data['bank_account_age_months'] < 12:
+            limiting_factors.append("⚠️ Bank account age is less than a year. Financial stability history is building but currently limits your score.")
+            
+        if user_data['new_credit_enquiries'] > 4:
+            limiting_factors.append(f"⚠️ High number of recent credit enquiries ({user_data['new_credit_enquiries']}). This suggests financial distress to lenders.")
+
+        if user_data['work_experience'] < 2:
+            limiting_factors.append("⚠️ Limited work experience (< 2 years). Stability is a key factor for gig worker credit scoring.")
+
+        if user_data['age'] < 21:
+            limiting_factors.append("⚠️ Young age (< 21). Statistical models often view younger borrowers as higher risk due to lack of history.")
+
         # Try to use ML recommendation engine
         try:
             from ml_recommendation_engine import MLRecommendationEngine
@@ -250,6 +287,7 @@ class CreditScorePredictor:
                     'score_category': self._get_score_category(predicted_score),
                     'strengths': ml_recommendations['strengths'],
                     'areas_for_improvement': [],
+                    'limiting_factors': limiting_factors,
                     'specific_suggestions': [],
                     'ml_insights': ml_recommendations.get('ml_insights', []),
                     'recommendation_type': 'ML-Generated'
@@ -286,6 +324,7 @@ class CreditScorePredictor:
             'score_category': self._get_score_category(predicted_score),
             'strengths': [],
             'areas_for_improvement': [],
+            'limiting_factors': limiting_factors,
             'specific_suggestions': [],
             'recommendation_type': 'Rule-Based (Fallback)'
         }
@@ -310,10 +349,12 @@ class CreditScorePredictor:
         if score >= 750:
             return "Excellent"
         elif score >= 700:
-            return "Good"
+            return "Very Good"
         elif score >= 650:
+            return "Good"
+        elif score >= 550:
             return "Fair"
-        elif score >= 600:
+        elif score >= 500:
             return "Poor"
         else:
             return "Very Poor"
@@ -378,7 +419,7 @@ class CreditScorePredictor:
         self.model = model_data['model']
         self.scaler = model_data['scaler']
         self.feature_names = model_data['feature_names']
-        self.feature_importance = model_data['feature_importance']
+        self.feature_importance = model_data.get('feature_importance')
         self.is_trained = True
         
         print(f"Model loaded from {filepath}")
@@ -404,8 +445,11 @@ def main():
     # Initialize predictor
     predictor = CreditScorePredictor()
     
-    # Load and preprocess data
-    X, y = predictor.load_and_preprocess_data('gig_worker_credit_dataset.csv')
+    # Load and preprocess data - use absolute path
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(script_dir, 'gig_worker_credit_dataset.csv')
+    X, y = predictor.load_and_preprocess_data(data_path)
     
     # Engineer features
     X_enhanced = predictor.engineer_features(X)
@@ -413,8 +457,10 @@ def main():
     # Train models
     results = predictor.train_models(X_enhanced, y)
     
-    # Save the model
-    predictor.save_model('credit_score_model.pkl')
+    # Save the model - use absolute path
+    model_path = os.path.join(script_dir, 'credit_score_model.pkl')
+    predictor.save_model(model_path)
+    print(f"\n✅ Model saved to: {model_path}")
     
     # Display feature importance
     if predictor.feature_importance is not None:

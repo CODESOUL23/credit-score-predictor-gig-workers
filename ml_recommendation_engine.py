@@ -42,10 +42,8 @@ class MLRecommendationEngine:
         
     def generate_training_data(self, base_dataset_path: str = 'gig_worker_credit_dataset.csv'):
         """
-        Generate synthetic training data for recommendation learning.
         Creates scenarios where users with different profiles need different recommendations.
         """
-        print("==> Generating ML training data for recommendations...")
         
         # Handle file path - check if absolute path or relative to script directory
         import os
